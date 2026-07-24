@@ -1,0 +1,54 @@
+name: Unpack Bazi knowledge archive
+
+on:
+  push:
+    branches:
+      - agent/unpack-bazi-archive
+    paths:
+      - .github/workflows/unpack-bazi-archive.yml
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/unpack-bazi-archive
+          fetch-depth: 0
+
+      - name: Extract archive into repository root
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f bazi-standalone.zip
+          workdir="$(mktemp -d)"
+          unzip -q bazi-standalone.zip -d "$workdir"
+
+          shopt -s nullglob dotglob
+          entries=("$workdir"/*)
+          source_root="$workdir"
+          if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
+            source_root="${entries[0]}"
+          fi
+
+          cp -a "$source_root"/. ./
+          mkdir -p 99_sources/imports
+          mv bazi-standalone.zip 99_sources/imports/bazi-standalone.zip
+
+      - name: Commit extracted knowledge base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No extracted changes to commit."
+            exit 0
+          fi
+          git commit -m "Unpack Bazi knowledge archive"
+          git push origin HEAD:agent/unpack-bazi-archive
